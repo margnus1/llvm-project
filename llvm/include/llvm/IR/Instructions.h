@@ -2920,6 +2920,12 @@ class BranchInst : public Instruction {
 
   void AssertOK();
 
+  // Is the branch conditional?
+  //
+  // Due to SIMT-modelled branches (br simt), unconditional branches can have
+  // more than one operand.
+  bool IsConditional;
+
 protected:
   // Note: Instruction needs to be a friend here to call cloneImpl.
   friend class Instruction;
@@ -2976,8 +2982,8 @@ public:
   /// Transparently provide more efficient getOperand methods.
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);
 
-  bool isUnconditional() const { return getNumOperands() == 1; }
-  bool isConditional()   const { return getNumOperands() == 3; }
+  bool isUnconditional() const { return !IsConditional; }
+  bool isConditional()   const { return IsConditional; }
 
   Value *getCondition() const {
     assert(isConditional() && "Cannot get condition of an uncond branch!");

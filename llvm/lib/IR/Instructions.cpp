@@ -1173,6 +1173,7 @@ BranchInst::BranchInst(BasicBlock *IfTrue, Instruction *InsertBefore)
                   InsertBefore) {
   assert(IfTrue && "Branch destination may not be null!");
   Op<-1>() = IfTrue;
+  IsConditional = false;
 }
 
 BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
@@ -1183,6 +1184,7 @@ BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
   Op<-1>() = IfTrue;
   Op<-2>() = IfFalse;
   Op<-3>() = Cond;
+  IsConditional = true;
 #ifndef NDEBUG
   AssertOK();
 #endif
@@ -1193,6 +1195,7 @@ BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *InsertAtEnd)
                   OperandTraits<BranchInst>::op_end(this) - 1, 1, InsertAtEnd) {
   assert(IfTrue && "Branch destination may not be null!");
   Op<-1>() = IfTrue;
+  IsConditional = false;
 }
 
 BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
@@ -1202,6 +1205,7 @@ BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
   Op<-1>() = IfTrue;
   Op<-2>() = IfFalse;
   Op<-3>() = Cond;
+  IsConditional = true;
 #ifndef NDEBUG
   AssertOK();
 #endif
@@ -1212,10 +1216,13 @@ BranchInst::BranchInst(const BranchInst &BI)
                   OperandTraits<BranchInst>::op_end(this) - BI.getNumOperands(),
                   BI.getNumOperands()) {
   Op<-1>() = BI.Op<-1>();
-  if (BI.getNumOperands() != 1) {
-    assert(BI.getNumOperands() == 3 && "BR can have 1 or 3 operands!");
+  IsConditional = BI.IsConditional;
+  if (IsConditional) {
+    assert(BI.getNumOperands() == 3 && "Conditional BR needs 3 operands!");
     Op<-3>() = BI.Op<-3>();
     Op<-2>() = BI.Op<-2>();
+  } else {
+    assert(BI.getNumOperands() == 1 && "Unconditional BR needs 1 operand!");
   }
   SubclassOptionalData = BI.SubclassOptionalData;
 }
