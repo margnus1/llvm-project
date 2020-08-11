@@ -1176,6 +1176,18 @@ BranchInst::BranchInst(BasicBlock *IfTrue, Instruction *InsertBefore)
   IsConditional = false;
 }
 
+BranchInst::BranchInst(BasicBlock *IfTrue, Type *RetTy,
+                       ArrayRef<Value*> SimtDependencies,
+                       Instruction *InsertBefore)
+    : Instruction(RetTy, Instruction::Br,
+                  OperandTraits<BranchInst>::op_end(this) - 1 - SimtDependencies.size(),
+                  1 + SimtDependencies.size(), InsertBefore) {
+  assert(IfTrue && "Branch destination may not be null!");
+  llvm::copy(SimtDependencies, op_begin());
+  Op<-1>() = IfTrue;
+  IsConditional = false;
+}
+
 BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
                        Instruction *InsertBefore)
     : Instruction(Type::getVoidTy(IfTrue->getContext()), Instruction::Br,
@@ -1190,10 +1202,38 @@ BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
 #endif
 }
 
+BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
+                       Type *RetTy, ArrayRef<Value*> SimtDependencies,
+                       Instruction *InsertBefore)
+    : Instruction(RetTy, Instruction::Br,
+                  OperandTraits<BranchInst>::op_end(this) - 3 - SimtDependencies.size(),
+                  3 + SimtDependencies.size(), InsertBefore) {
+  llvm::copy(SimtDependencies, op_begin());
+  Op<-1>() = IfTrue;
+  Op<-2>() = IfFalse;
+  Op<-3>() = Cond;
+  IsConditional = true;
+#ifndef true
+  AssertOK();
+#endif
+}
+
 BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *InsertAtEnd)
     : Instruction(Type::getVoidTy(IfTrue->getContext()), Instruction::Br,
                   OperandTraits<BranchInst>::op_end(this) - 1, 1, InsertAtEnd) {
   assert(IfTrue && "Branch destination may not be null!");
+  Op<-1>() = IfTrue;
+  IsConditional = false;
+}
+
+BranchInst::BranchInst(BasicBlock *IfTrue, Type *RetTy,
+                       ArrayRef<Value*> SimtDependencies,
+                       BasicBlock *InsertAtEnd)
+    : Instruction(RetTy, Instruction::Br,
+                  OperandTraits<BranchInst>::op_end(this) - 1 - SimtDependencies.size(),
+                  1 + SimtDependencies.size(), InsertAtEnd) {
+  assert(IfTrue && "Branch destination may not be null!");
+  llvm::copy(SimtDependencies, op_begin());
   Op<-1>() = IfTrue;
   IsConditional = false;
 }
@@ -1211,19 +1251,33 @@ BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
 #endif
 }
 
+BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
+                       Type *RetTy, ArrayRef<Value*> SimtDependencies,
+                       BasicBlock *InsertAtEnd)
+    : Instruction(RetTy, Instruction::Br,
+                  OperandTraits<BranchInst>::op_end(this) - 3 - SimtDependencies.size(),
+                  3 + SimtDependencies.size(), InsertAtEnd) {
+  llvm::copy(SimtDependencies, op_begin());
+  Op<-1>() = IfTrue;
+  Op<-2>() = IfFalse;
+  Op<-3>() = Cond;
+  IsConditional = true;
+#ifndef NDEBUG
+  AssertOK();
+#endif
+}
+
 BranchInst::BranchInst(const BranchInst &BI)
-    : Instruction(Type::getVoidTy(BI.getContext()), Instruction::Br,
+    : Instruction(BI.getType(), Instruction::Br,
                   OperandTraits<BranchInst>::op_end(this) - BI.getNumOperands(),
                   BI.getNumOperands()) {
-  Op<-1>() = BI.Op<-1>();
   IsConditional = BI.IsConditional;
   if (IsConditional) {
-    assert(BI.getNumOperands() == 3 && "Conditional BR needs 3 operands!");
-    Op<-3>() = BI.Op<-3>();
-    Op<-2>() = BI.Op<-2>();
+    assert(BI.getNumOperands() >= 3 && "Conditional BR needs 3 operands!");
   } else {
-    assert(BI.getNumOperands() == 1 && "Unconditional BR needs 1 operand!");
+    assert(BI.getNumOperands() >= 1 && "Unconditional BR needs 1 operand!");
   }
+  std::copy(BI.op_begin(), BI.op_end(), op_begin());
   SubclassOptionalData = BI.SubclassOptionalData;
 }
 

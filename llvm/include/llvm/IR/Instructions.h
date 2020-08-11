@@ -2904,19 +2904,41 @@ class BranchInst : public Instruction {
   /// they don't have to check for cond/uncond branchness. These are mostly
   /// accessed relative from op_end().
   BranchInst(const BranchInst &BI);
-  // BranchInst constructors (where {B, T, F} are blocks, and C is a condition):
+  // BranchInst constructors (where {B, T, F} are blocks, C is a condition, Ty
+  // is a type, and Vs are Values):
   // BranchInst(BB *B)                           - 'br B'
   // BranchInst(BB* T, BB *F, Value *C)          - 'br C, T, F'
   // BranchInst(BB* B, Inst *I)                  - 'br B'        insert before I
   // BranchInst(BB* T, BB *F, Value *C, Inst *I) - 'br C, T, F', insert before I
   // BranchInst(BB* B, BB *I)                    - 'br B'        insert at end
   // BranchInst(BB* T, BB *F, Value *C, BB *I)   - 'br C, T, F', insert at end
+  // BranchInst(BB *B, Type* Ty,                 - 'br Ty simt(Vs) B'
+  //            ArrayRef<Value*> Vs)
+  // BranchInst(BB* T, BB *F, Value *C,          - 'br Ty simt(Vs) C, T, F'
+  //            Type* Ty, ArrayRef<Value*> Vs)
+  // BranchInst(BB* B, Inst *I, Type* Ty,        - 'br Ty simt(Vs) B',
+  //            ArrayRef<Value*> Vs)               insert before I
+  // BranchInst(BB* T, BB *F, Value *C, Type* Ty,- 'br Ty simt(Vs) C, T, F',
+  //            ArrayRef<Value*> Vs, Inst *I)      insert before I
+  // BranchInst(BB* B, BB *I, Type* Ty,          - 'br Ty simt(Vs) B',
+  //            ArrayRef<Value*> Vs)               insert at end
+  // BranchInst(BB* T, BB *F, Value *C, Type* Ty,- 'br Ty simt(Vs) C, T, F',
+  //            ArrayRef<Value*> Vs, BB *I)        insert at end
   explicit BranchInst(BasicBlock *IfTrue, Instruction *InsertBefore = nullptr);
+  BranchInst(BasicBlock *IfTrue, Type *RetTy, ArrayRef<Value*> SimtDependencies,
+             Instruction *InsertBefore = nullptr);
   BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
              Instruction *InsertBefore = nullptr);
+  BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
+             Type *RetTy, ArrayRef<Value*> SimtDependencies,
+             Instruction *InsertBefore = nullptr);
   BranchInst(BasicBlock *IfTrue, BasicBlock *InsertAtEnd);
+  BranchInst(BasicBlock *IfTrue, Type *RetTy, ArrayRef<Value*> SimtDependencies,
+             BasicBlock *InsertAtEnd);
   BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
              BasicBlock *InsertAtEnd);
+  BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond, Type *RetTy,
+             ArrayRef<Value*> SimtDependencies, BasicBlock *InsertAtEnd);
 
   void AssertOK();
 
@@ -2965,13 +2987,36 @@ public:
     return new(1) BranchInst(IfTrue, InsertBefore);
   }
 
+  static BranchInst *Create(BasicBlock *IfTrue, Type *RetTy,
+                            ArrayRef<Value*> SimtDependencies,
+                            Instruction *InsertBefore = nullptr) {
+    return new(1+SimtDependencies.size())
+        BranchInst(IfTrue, RetTy, SimtDependencies, InsertBefore);
+  }
+
   static BranchInst *Create(BasicBlock *IfTrue, BasicBlock *IfFalse,
                             Value *Cond, Instruction *InsertBefore = nullptr) {
     return new(3) BranchInst(IfTrue, IfFalse, Cond, InsertBefore);
   }
 
+  static BranchInst *Create(BasicBlock *IfTrue, BasicBlock *IfFalse,
+                            Value *Cond, Type *RetTy,
+                            ArrayRef<Value*> SimtDependencies,
+                            Instruction *InsertBefore = nullptr) {
+    return new(3+SimtDependencies.size())
+        BranchInst(IfTrue, IfFalse, Cond, RetTy, SimtDependencies,
+                   InsertBefore);
+  }
+
   static BranchInst *Create(BasicBlock *IfTrue, BasicBlock *InsertAtEnd) {
     return new(1) BranchInst(IfTrue, InsertAtEnd);
+  }
+
+  static BranchInst *Create(BasicBlock *IfTrue, Type *RetTy,
+                            ArrayRef<Value*> SimtDependencies,
+                            BasicBlock *InsertAtEnd) {
+    return new(1+SimtDependencies.size())
+        BranchInst(IfTrue, RetTy, SimtDependencies, InsertAtEnd);
   }
 
   static BranchInst *Create(BasicBlock *IfTrue, BasicBlock *IfFalse,
@@ -2979,11 +3024,21 @@ public:
     return new(3) BranchInst(IfTrue, IfFalse, Cond, InsertAtEnd);
   }
 
+  static BranchInst *Create(BasicBlock *IfTrue, BasicBlock *IfFalse,
+                            Value *Cond, Type *RetTy,
+                            ArrayRef<Value*> SimtDependencies,
+                            BasicBlock *InsertAtEnd) {
+    return new(3+SimtDependencies.size())
+        BranchInst(IfTrue, IfFalse, Cond, RetTy, SimtDependencies, InsertAtEnd);
+  }
+
   /// Transparently provide more efficient getOperand methods.
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);
 
   bool isUnconditional() const { return !IsConditional; }
   bool isConditional()   const { return IsConditional; }
+
+  bool isSimt() const { return !getType()->isVoidTy() || getNumSimtOperands(); }
 
   Value *getCondition() const {
     assert(isConditional() && "Cannot get condition of an uncond branch!");
@@ -2996,6 +3051,7 @@ public:
   }
 
   unsigned getNumSuccessors() const { return 1+isConditional(); }
+  unsigned getNumSimtOperands() const { return getNumOperands() - 1 - 2*isConditional(); }
 
   BasicBlock *getSuccessor(unsigned i) const {
     assert(i < getNumSuccessors() && "Successor # out of range for Branch!");
