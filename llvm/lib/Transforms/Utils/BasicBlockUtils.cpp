@@ -186,6 +186,8 @@ bool llvm::MergeBlockIntoPredecessor(BasicBlock *BB, DomTreeUpdater *DTU,
   if (PredBB->getTerminator()->isExceptionalTerminator())
     return false;
 
+  if (PredBB->getTerminator()->getNumUses()) return false;
+
   // Can't merge if there are multiple distinct successors.
   if (!PredecessorWithTwoSuccessors && PredBB->getUniqueSuccessor() != BB)
     return false;
