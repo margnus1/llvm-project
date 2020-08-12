@@ -1009,6 +1009,8 @@ bool JumpThreadingPass::ProcessBlock(BasicBlock *BB) {
   if (BranchInst *BI = dyn_cast<BranchInst>(Terminator)) {
     // Can't thread an unconditional jump.
     if (BI->isUnconditional()) return false;
+    // For now, can't thread a simt-modelled branch
+    if (BI->isSimt()) return false;
     Condition = BI->getCondition();
   } else if (SwitchInst *SI = dyn_cast<SwitchInst>(Terminator)) {
     Condition = SI->getCondition();
@@ -1888,7 +1890,7 @@ bool JumpThreadingPass::MaybeMergeBasicBlockIntoOnlyPred(BasicBlock *BB) {
 
   const Instruction *TI = SinglePred->getTerminator();
   if (TI->isExceptionalTerminator() || TI->getNumSuccessors() != 1 ||
-      SinglePred == BB || hasAddressTakenAndUsed(BB))
+      SinglePred == BB || hasAddressTakenAndUsed(BB) || TI->getNumUses())
     return false;
 
   // If SinglePred was a loop header, BB becomes one.

@@ -717,6 +717,8 @@ void llvm::MergeBasicBlockIntoOnlyPred(BasicBlock *DestBB,
 
   BasicBlock *PredBB = DestBB->getSinglePredecessor();
   assert(PredBB && "Block doesn't have a single predecessor!");
+  assert(!cast<BranchInst>(PredBB->getTerminator())->isSimt()
+         && "Cannot merge with a block ending in 'br simt'");
 
   bool ReplaceEntryBB = false;
   if (PredBB == &DestBB->getParent()->getEntryBlock())
@@ -988,8 +990,12 @@ bool llvm::TryToSimplifyUncondBranchFromEmptyBlock(BasicBlock *BB,
          "TryToSimplifyUncondBranchFromEmptyBlock called on entry block!");
 
   // We can't eliminate infinite loops.
-  BasicBlock *Succ = cast<BranchInst>(BB->getTerminator())->getSuccessor(0);
+  BranchInst *Branch = cast<BranchInst>(BB->getTerminator());
+  BasicBlock *Succ = Branch->getSuccessor(0);
   if (BB == Succ) return false;
+
+  // We don't know how to rewrite simt-modelled branches
+  if (Branch->isSimt()) return false;
 
   // Check to see if merging these blocks would cause conflicts for any of the
   // phi nodes in BB or Succ. If not, we can safely merge.
