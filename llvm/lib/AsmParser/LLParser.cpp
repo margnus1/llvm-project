@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "LLParser.h"
+#include "LLToken.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/None.h"
 #include "llvm/ADT/STLExtras.h"
@@ -6023,14 +6024,47 @@ bool LLParser::ParseRet(Instruction *&Inst, BasicBlock *BB,
 /// ParseBr
 ///   ::= 'br' TypeAndValue
 ///   ::= 'br' TypeAndValue ',' TypeAndValue ',' TypeAndValue
+///   ::= 'br' OptionalType 'simt' '(' TypeAndValueList ')'
+///            TypeAndValue ',' TypeAndValue ',' TypeAndValue
 bool LLParser::ParseBr(Instruction *&Inst, PerFunctionState &PFS) {
   LocTy Loc, Loc2;
   Value *Op0;
   BasicBlock *Op1, *Op2;
-  if (ParseTypeAndValue(Op0, Loc, PFS)) return true;
+  bool Simt = false;
+  SmallVector<Value*, 8> SimtArgList;
+
+  Type *RetTy = Type::getVoidTy(Context);
+  Type *Ty;
+  if (Lex.getKind() != lltok::kw_simt &&
+      ParseType(Ty, true /* void allowed (for br simt return type) */))
+    return true;
+
+  if (Lex.getKind() == lltok::kw_simt) {
+    RetTy = Ty;
+    Simt = true;
+    Lex.Lex();
+
+    if (ParseToken(lltok::lparen, "expected '(' after br simt"))
+      return true;
+
+    while (Lex.getKind() != lltok::rparen) {
+      // If this isn't the first argument, we need a comma.
+      if (!SimtArgList.empty() &&
+          ParseToken(lltok::comma, "expected ',' in argument list"))
+        return true;
+
+      SimtArgList.emplace_back();
+      if (ParseTypeAndValue(SimtArgList.back(), PFS)) return true;
+    }
+    Lex.Lex(); // Consume the ')'
+    if (ParseType(Ty)) return true;
+  }
+
+
+  if (ParseValue(Ty, Op0, Loc, PFS)) return true;
 
   if (BasicBlock *BB = dyn_cast<BasicBlock>(Op0)) {
-    Inst = BranchInst::Create(BB);
+    Inst = BranchInst::Create(BB, RetTy, SimtArgList);
     return false;
   }
 
@@ -6043,7 +6077,7 @@ bool LLParser::ParseBr(Instruction *&Inst, PerFunctionState &PFS) {
       ParseTypeAndBasicBlock(Op2, Loc2, PFS))
     return true;
 
-  Inst = BranchInst::Create(Op1, Op2, Op0);
+  Inst = BranchInst::Create(Op1, Op2, Op0, RetTy, SimtArgList);
   return false;
 }
 

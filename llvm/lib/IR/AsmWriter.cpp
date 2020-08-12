@@ -3816,15 +3816,33 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
   const Value *Operand = I.getNumOperands() ? I.getOperand(0) : nullptr;
 
   // Special case conditional branches to swizzle the condition out to the front
-  if (isa<BranchInst>(I) && cast<BranchInst>(I).isConditional()) {
+  if (isa<BranchInst>(I)) {
     const BranchInst &BI(cast<BranchInst>(I));
-    Out << ' ';
-    writeOperand(BI.getCondition(), true);
-    Out << ", ";
-    writeOperand(BI.getSuccessor(0), true);
-    Out << ", ";
-    writeOperand(BI.getSuccessor(1), true);
+    if (BI.getType() != Type::getVoidTy(BI.getContext())) {
+      Out << ' ';
+      TypePrinter.print(BI.getType(), Out);
+    }
+    if (BI.isSimt()) {
+      Out << " simt (";
+      for (unsigned i = 0, e = BI.getNumSimtOperands(); i != e; ++i) {
+        if (i != 0)
+          Out << ", ";
+        writeOperand(I.getOperand(i), true);
+      }
+      Out << ')';
+    }
 
+    if (BI.isConditional()) {
+      Out << ' ';
+      writeOperand(BI.getCondition(), true);
+      Out << ", ";
+      writeOperand(BI.getSuccessor(0), true);
+      Out << ", ";
+      writeOperand(BI.getSuccessor(1), true);
+    } else {
+      Out << ' ';
+      writeOperand(BI.getSuccessor(0), true);
+    }
   } else if (isa<SwitchInst>(I)) {
     const SwitchInst& SI(cast<SwitchInst>(I));
     // Special case switch instruction to get formatting nice and correct.

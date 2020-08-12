@@ -569,6 +569,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(inrange);
   KEYWORD(align);
   KEYWORD(addrspace);
+  KEYWORD(simt);
   KEYWORD(section);
   KEYWORD(partition);
   KEYWORD(alias);
