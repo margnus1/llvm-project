@@ -1572,6 +1572,7 @@ static bool tryToReplaceWithConstant(SCCPSolver &Solver, Value *V) {
       return false;
     std::vector<Constant *> ConstVals;
     auto *ST = cast<StructType>(V->getType());
+    if (ST->isOpaque()) return false;
     for (unsigned i = 0, e = ST->getNumElements(); i != e; ++i) {
       ValueLatticeElement V = IVs[i];
       ConstVals.push_back(isConstant(V)
