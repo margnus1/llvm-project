@@ -568,6 +568,11 @@ private:
     visitTerminator(CPI);
   }
 
+  void visitBranchInst(BranchInst &BI) {
+    if (BI.isSimt()) markOverdefined(&BI);
+    visitTerminator(BI);
+  }
+
   // Instructions that cannot be folded away.
 
   void visitStoreInst     (StoreInst &I);
